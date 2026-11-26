@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f7f6f1">
   <meta name="description" content="Read books, look up words in place, and listen aloud.">
   <title>Reading Room</title>
-  <link rel="stylesheet" href="./styles.css?v=2">
-  <script type="module" src="./app.js?v=2"></script>
+  <link rel="stylesheet" href="./styles.css?v=3">
+  <script type="module" src="./app.js?v=3"></script>
 </head>
 <body>
   <header class="masthead">
@@ -31,12 +31,18 @@
         <div class="section-heading"><h1 id="library-title">The classics shelf</h1><a href="https://www.gutenberg.org/ebooks/" target="_blank" rel="noopener noreferrer">Find more on Project Gutenberg <span aria-hidden="true">↗</span></a></div>
         <div class="shelf" id="classics"></div>
       </section>
+      <div class="offline-options" id="offline-options" hidden>
+        <button type="button" class="button button-outline" id="enable-offline">Save for offline reading</button>
+        <span id="offline-status" role="status"></span>
+      </div>
     </section>
     <section id="reader" aria-labelledby="book-title" hidden>
       <div class="reader-bar">
         <a href="#library" class="back-link">Library</a>
         <div class="reader-tools">
           <button id="open-contents" class="button button-outline">Contents</button>
+          <button id="open-find" class="button button-outline" disabled>Find</button>
+          <button id="open-bookmarks" class="button button-outline" disabled>Bookmarks</button>
           <button id="open-settings" class="button button-outline" aria-label="Reading settings">Aa</button>
         </div>
       </div>
@@ -46,6 +52,7 @@
           <p class="eyebrow" id="chapter-count"></p>
           <h1 id="book-title"></h1>
           <p class="byline" id="book-author"></p>
+          <div class="reading-progress"><progress id="reading-progress" max="100" value="0" aria-label="Position in book"></progress><span id="reading-percent"></span></div>
           <h2 id="chapter-title"></h2>
           <p class="reader-tip">Tap a word for its meaning, or <button type="button" class="text-button" id="open-lookup">look up a word</button>.</p>
         </div>
@@ -74,6 +81,21 @@
   <dialog id="contents-dialog" aria-labelledby="contents-title">
     <div class="dialog-head"><h2 id="contents-title">Contents</h2><button class="close" data-close aria-label="Close">×</button></div>
     <ol id="contents-list"></ol>
+  </dialog>
+  <dialog id="find-dialog" aria-labelledby="find-title">
+    <div class="dialog-head"><h2 id="find-title">Find in this book</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <form id="find-form" class="lookup-form"><input type="search" id="find-query" aria-label="Word or phrase in book" placeholder="Word or phrase" maxlength="150" required><button class="button button-primary">Search</button></form>
+    <p id="find-status" role="status"></p>
+    <ul id="find-results" class="reader-list"></ul>
+  </dialog>
+  <dialog id="bookmarks-dialog" aria-labelledby="bookmarks-title">
+    <div class="dialog-head"><h2 id="bookmarks-title">Bookmarks in this book</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <form id="bookmark-form">
+      <label class="field">Note (optional)<textarea id="bookmark-note" rows="2" maxlength="500" placeholder="Add a note to this spot"></textarea></label>
+      <button type="submit" id="save-bookmark" class="button button-primary">Bookmark this spot</button>
+    </form>
+    <p id="bookmark-status" role="status"></p>
+    <ul id="bookmarks-list" class="reader-list"></ul>
   </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <div class="dialog-head"><h2 id="settings-title">Reading settings</h2><button class="close" data-close aria-label="Close">×</button></div>

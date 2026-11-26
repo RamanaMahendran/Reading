@@ -32,7 +32,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--paper); color: var(--ink); }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, select { cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
 a, .text-button { color: var(--accent); text-underline-offset: .2em; }
@@ -61,6 +61,7 @@ nav a[aria-current="page"] { color: var(--accent); text-decoration: underline; }
 .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
 .hero .eyebrow { color: #dce4ba; margin-bottom: 14px; }
 .hero .summary { color: #e0eadc; margin: 17px 0 24px; max-width: 410px; }
+.hero-progress { color: #e0eadc; margin-block: -12px 14px; }
 .hero .button-primary { color: #17362a; background: #f1e6c6; }
 .hero .button-outline { background: transparent; color: #fff9e9; border-color: #a8b9a8; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 9px; }
@@ -94,22 +95,29 @@ nav a[aria-current="page"] { color: var(--accent); text-decoration: underline; }
 .book .cover small { display: none; }
 .cover-motif { font-size: 24cqw; line-height: 1; margin-bottom: 4%; }
 .reader-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-block: 20px; border-bottom: 1px solid var(--line); }
-.reader-tools { display: flex; gap: 7px; }
+.reader-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .reading-head, .pages, .chapter-nav { max-width: 710px; margin-inline: auto; }
 .reading-head { padding: 36px 0 19px; }
 .reading-head h1 { margin-top: 8px; }
 .byline { color: var(--muted); margin-top: 9px; }
+.reading-progress { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); }
+.reading-progress progress { width: 100px; height: 9px; accent-color: var(--accent); }
 .reading-head h2 { margin-top: 31px; }
 .reader-tip { margin-top: 10px; color: var(--muted); }
 .text-button { background: transparent; padding: 0; border: 0; text-decoration: underline; }
 .pages { font-size: var(--reader-size); line-height: 1.72; overflow-wrap: break-word; }
 .pages p { margin: 0 0 .94em; scroll-margin: 30px; }
 .pages p[data-speaking] { background: color-mix(in srgb, var(--accent) 15%, transparent); border-radius: 5px; }
+.pages p[data-bookmarked] { box-shadow: -3px 0 var(--accent); padding-inline-start: 7px; }
+.pages p[data-search-match] { outline: 1px solid var(--line); outline-offset: 4px; }
+::highlight(reading-search) { color: #272316; background: #ffe299; }
+.reader-list mark { color: #272316; background: #ffe299; }
 .chapter-nav { display: flex; justify-content: space-between; gap: 8px; margin-block: 28px 110px; }
 .player { position: fixed; z-index: 2; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: 0 7px 40px #1d322327; }
 .player .button { min-width: 71px; }
 .speed { display: flex; align-items: center; gap: 5px; }
-select, input { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 8px; min-height: 40px; }
+select, input, textarea { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 8px; min-height: 40px; }
+textarea { resize: vertical; }
 #audio-status { max-width: 185px; color: var(--muted); padding-inline: 3px; }
 #reader-status:not(:empty) { padding-block: 15px; }
 .words-heading { padding-top: 32px; }
@@ -130,6 +138,13 @@ dialog p { line-height: 1.5; }
 .context { border-left: 2px solid var(--line); padding-left: 10px; color: var(--muted); margin: 12px 0; }
 #contents-list li { margin-block: 5px; }
 #contents-list button { white-space: normal; text-align: left; width: 100%; justify-content: flex-start; }
+.reader-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 7px; }
+.passage { width: 100%; display: grid; gap: 4px; padding: 10px; text-align: left; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.passage:hover:not(:disabled) { border-color: var(--accent); }
+.bookmark-row { display: flex; align-items: flex-start; gap: 7px; }
+.bookmark-note { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--accent); }
+#bookmark-status:not(:empty) { margin-top: 9px; }
+.offline-options { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-bottom: 26px; color: var(--muted); }
 .visually-hidden { position: absolute; height: 1px; width: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 760px) {
   .shell { width: calc(100% - 36px); }
@@ -150,6 +165,8 @@ dialog p { line-height: 1.5; }
   .hero .button { padding-inline: 10px; }
   .shelf-section { margin-top: 26px; }
   .reading-head { padding-top: 27px; }
+  .reader-tools { gap: 4px; }
+  .reader-tools .button { padding-inline: 7px; }
   .player { gap: 5px; }
   .player .button { min-width: 0; padding-inline: 10px; }
   #audio-status { max-width: 90px; }

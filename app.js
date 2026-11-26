@@ -1,5 +1,6 @@
 import { classics, importBook, localBooks, parseText, saveBook } from "./books.js";
 import { lookupOffline } from "./dictionary.js";
+import { findPassages, readingPercent } from "./reading-tools.js";
 
 const $ = id => document.getElementById(id);
 const element = (tag, text = "", className = "") => {
@@ -13,7 +14,7 @@ function readState() {
   try { return JSON.parse(localStorage.getItem(key)) || {}; }
   catch { return {}; }
 }
-const saved = { locations: {}, words: {}, ...readState() };
+const saved = { locations: {}, words: {}, bookmarks: {}, ...readState() };
 const settings = saved.settings = { theme: "paper", size: "12", speed: "1", voice: "", ...saved.settings };
 if (!["12", "17", "25", "30"].includes(settings.size)) settings.size = "12";
 function persist() {
@@ -30,6 +31,7 @@ let routeVersion = 0;
 let scrollFrame = 0;
 let restoring = false;
 let selectedWord;
+let bookmarkPosition;
 let lookupSequence = 0;
 const wordPattern = /[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*/gu;
 const speech = window.speechSynthesis;
@@ -47,13 +49,16 @@ function cover(book) {
 }
 
 function bookUrl(book) { return `#read/${book.id}`; }
+function progressLabel(percent) { return `${percent}% through`; }
 function shelfLink(book) {
   const link = element("a", "", "book");
   link.href = bookUrl(book);
   const info = element("div");
   info.append(element("h3", book.title));
   if (book.author) info.append(element("p", book.author));
-  info.append(element("small", saved.locations[book.id] ? "Continue reading" : "Open book"));
+  const position = saved.locations[book.id];
+  const label = position ? (position.percent > 0 ? progressLabel(position.percent) : "Continue reading") : "Open book";
+  info.append(element("small", label));
   link.append(cover(book), info);
   return link;
 }
@@ -67,6 +72,8 @@ function renderLibrary() {
     element("h2", book.title),
     element("p", previous ? book.author : book.description, "summary")
   );
+  const percent = saved.locations[book.id]?.percent;
+  if (percent > 0) copy.append(element("p", progressLabel(percent), "hero-progress"));
   const actions = element("div", "", "hero-actions");
   const read = element("a", previous ? "Resume reading" : "Start reading", "button button-primary");
   read.href = bookUrl(book);
@@ -128,17 +135,31 @@ function currentLocation() {
 
 function remember(position = currentLocation()) {
   if (!openBook || restoring) return;
-  saved.locations[openBook.id] = position;
+  const paragraph = $("pages").children[position.index];
+  const height = paragraph?.getBoundingClientRect().height;
+  const fraction = height > 0 ? Math.max(0, Math.min(1, position.offset / height)) : 0;
+  storePosition(position, fraction);
+}
+
+function storePosition(position, fraction = 0) {
+  const percent = readingPercent(openBook, position, fraction);
+  saved.locations[openBook.id] = { ...position, percent };
   saved.last = openBook.id;
+  $("reading-progress").value = percent;
+  $("reading-percent").textContent = progressLabel(percent);
   persist();
 }
 
 function chapterChange(index, position = null) {
   chapter = index;
   const section = openBook.sections[chapter];
+  window.CSS?.highlights?.delete("reading-search");
   $("chapter-count").textContent = `Section ${chapter + 1} of ${openBook.sections.length}`;
   $("chapter-title").textContent = section.title;
   $("pages").replaceChildren(...section.paragraphs.map(text => element("p", text)));
+  for (const bookmark of saved.bookmarks[openBook.id] || []) {
+    if (bookmark.chapter === chapter) $("pages").children[bookmark.index]?.setAttribute("data-bookmarked", "");
+  }
   $("prev-chapter").disabled = chapter === 0;
   $("next-chapter").disabled = chapter === openBook.sections.length - 1;
   const selected = position && $("pages").children[position.index];
@@ -174,7 +195,7 @@ async function route() {
     return;
   }
   $("reader-content").hidden = true;
-  $("open-contents").disabled = true;
+  setReaderNavigation(false);
   $("reader-status").textContent = "Opening book…";
   try {
     const book = await getBook(id);
@@ -186,25 +207,145 @@ async function route() {
     document.title = `${book.title} | Reading Room`;
     $("reader-status").textContent = "";
     $("reader-content").hidden = false;
-    $("open-contents").disabled = false;
+    setReaderNavigation(true);
     const position = saved.locations[id];
     const index = Math.min(book.sections.length - 1, Math.max(0, position?.chapter || 0));
     chapterChange(index, position);
-    saved.locations[id] = position || { chapter: index, index: 0, offset: 0 };
-    saved.last = id;
-    persist();
+    if (position && Number.isFinite(position.percent)) {
+      $("reading-progress").value = position.percent;
+      $("reading-percent").textContent = progressLabel(position.percent);
+      saved.last = id;
+      persist();
+    } else storePosition({ chapter: index, index: position?.index || 0, offset: position?.offset || 0 });
     paintPlayer();
   } catch (error) {
     if (routeVersion === version) $("reader-status").textContent = error.message || "Could not open this book.";
   }
 }
 
-function navigateChapter(index) {
+function setReaderNavigation(enabled) {
+  for (const id of ["open-contents", "open-find", "open-bookmarks"]) $(id).disabled = !enabled;
+}
+
+function navigateChapter(index, position = null) {
   if (!openBook?.sections[index]) return;
   clearAudio();
-  chapterChange(index);
-  saved.locations[openBook.id] = { chapter: index, index: 0, offset: 0 };
-  persist();
+  chapterChange(index, position);
+  storePosition({ chapter: index, index: position?.index || 0, offset: position?.offset || 0 });
+}
+
+function showPassage(hit) {
+  $("find-dialog").close();
+  navigateChapter(hit.chapter, { index: hit.index, offset: 0 });
+  const paragraph = $("pages").children[hit.index];
+  paragraph.setAttribute("data-search-match", "");
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild, hit.start);
+  range.setEnd(paragraph.firstChild, hit.end);
+  if (window.CSS?.highlights && window.Highlight) CSS.highlights.set("reading-search", new Highlight(range));
+  requestAnimationFrame(() => window.scrollTo(0, scrollY + range.getBoundingClientRect().top - innerHeight / 3));
+}
+
+function searchCurrentBook(event) {
+  event.preventDefault();
+  if (!openBook) return;
+  const { results, more } = findPassages(openBook, $("find-query").value);
+  $("find-status").textContent = results.length
+    ? (more ? `First ${results.length} matching passages. Refine your search for more specific results.` : `${results.length} matching ${results.length === 1 ? "passage" : "passages"}`)
+    : "No matching passages.";
+  $("find-results").replaceChildren(...results.map(hit => {
+    const row = element("li");
+    const jump = element("button", "", "passage");
+    const snippet = element("span");
+    snippet.append(document.createTextNode(hit.before), element("mark", hit.match), document.createTextNode(hit.after));
+    jump.append(element("strong", hit.title), snippet);
+    jump.addEventListener("click", () => showPassage(hit));
+    row.append(jump);
+    return row;
+  }));
+}
+
+function bookmarksFor(book) { return saved.bookmarks[book.id] || []; }
+function samePlace(a, b) { return a.chapter === b.chapter && a.index === b.index; }
+
+function renderBookmarks() {
+  const book = openBook;
+  const entries = bookmarksFor(book);
+  $("bookmarks-list").replaceChildren(...entries.map((bookmark, index) => {
+    const section = book.sections[bookmark.chapter];
+    const text = section?.paragraphs[bookmark.index];
+    const row = element("li", "", "bookmark-row");
+    const jump = element("button", "", "passage");
+    jump.append(element("strong", section?.title || "Saved spot"), element("span", text?.slice(0, 115) || "This passage is unavailable."));
+    if (bookmark.note) jump.append(element("span", bookmark.note, "bookmark-note"));
+    jump.disabled = !text;
+    jump.addEventListener("click", () => {
+      $("bookmarks-dialog").close();
+      navigateChapter(bookmark.chapter, bookmark);
+    });
+    const remove = element("button", "Remove", "button button-outline");
+    remove.setAttribute("aria-label", `Remove bookmark ${index + 1}`);
+    remove.addEventListener("click", () => {
+      saved.bookmarks[book.id] = entries.filter(entry => entry !== bookmark);
+      if (bookmark.chapter === chapter) $("pages").children[bookmark.index]?.removeAttribute("data-bookmarked");
+      persist();
+      renderBookmarks();
+    });
+    row.append(jump, remove);
+    return row;
+  }));
+  const existing = entries.find(entry => samePlace(entry, bookmarkPosition));
+  $("bookmark-status").textContent = entries.length ? "" : "No bookmarks yet.";
+  $("bookmark-note").value = existing?.note || "";
+  $("save-bookmark").textContent = existing ? "Update bookmark" : "Bookmark this spot";
+}
+
+function saveCurrentBookmark(event) {
+  event.preventDefault();
+  const entries = bookmarksFor(openBook);
+  const bookmark = { ...bookmarkPosition, note: $("bookmark-note").value.trim() };
+  saved.bookmarks[openBook.id] = [bookmark, ...entries.filter(entry => !samePlace(entry, bookmark))];
+  if (bookmark.chapter === chapter) $("pages").children[bookmark.index]?.setAttribute("data-bookmarked", "");
+  if (persist()) {
+    renderBookmarks();
+    $("bookmark-status").textContent = "Bookmark saved.";
+  } else $("bookmark-status").textContent = "This browser couldn’t save the bookmark.";
+}
+
+function setupOfflineReading() {
+  if (embeddedBooks || !window.isSecureContext || !navigator.serviceWorker || !("caches" in window)) return;
+  const button = $("enable-offline");
+  const status = $("offline-status");
+  $("offline-options").hidden = false;
+  const cacheKey = "reading-room:" + new URL("./", location.href).href + ":3";
+  async function showReady() {
+    if (!navigator.serviceWorker.controller || !await caches.has(cacheKey)) return false;
+    const cache = await caches.open(cacheKey);
+    if (!await cache.match(new URL("./dictionary.json.gz", location.href))) return false;
+    button.hidden = true;
+    status.textContent = "Ready to read offline on this device.";
+    return true;
+  }
+  void showReady().catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => void showReady().catch(() => {}));
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "Saving the app, classics, and dictionary…";
+    let timeout;
+    try {
+      await navigator.serviceWorker.register("./sw.js");
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => { timeout = setTimeout(reject, 45000); })
+      ]);
+      if (!await showReady()) status.textContent = "Finishing offline setup…";
+    } catch {
+      status.textContent = "Couldn’t save for offline reading. Try again while online.";
+    } finally {
+      clearTimeout(timeout);
+      button.disabled = false;
+    }
+  });
 }
 
 function applySettings() {
@@ -259,7 +400,11 @@ function speakNext(version) {
   if (!openBook || version !== speechVersion || !speaking) return;
   const items = openBook.sections[chapter].paragraphs;
   if (audio.index >= items.length) {
-    if (chapter + 1 === openBook.sections.length) { clearAudio("Finished listening"); return; }
+    if (chapter + 1 === openBook.sections.length) {
+      storePosition({ chapter, index: items.length - 1, offset: 0 }, 1);
+      clearAudio("Finished listening");
+      return;
+    }
     chapterChange(chapter + 1);
     audio.index = 0;
     audio.offset = 0;
@@ -278,8 +423,7 @@ function speakNext(version) {
   if (paragraph && !document.querySelector("dialog[open]") && paragraph.getBoundingClientRect().top > innerHeight * 0.75) {
     paragraph.scrollIntoView({ block: "start" });
   }
-  saved.locations[openBook.id] = { chapter, index: audio.index, offset: 0 };
-  persist();
+  storePosition({ chapter, index: audio.index, offset: 0 }, audio.offset / text.length);
   utterance.onend = () => {
     if (version !== speechVersion) return;
     audio.offset += chunk.length;
@@ -424,6 +568,20 @@ $("open-contents").addEventListener("click", () => {
   }));
   $("contents-dialog").showModal();
 });
+$("open-find").addEventListener("click", () => {
+  $("find-query").value = "";
+  $("find-results").replaceChildren();
+  $("find-status").textContent = "";
+  $("find-dialog").showModal();
+  $("find-query").focus();
+});
+$("find-form").addEventListener("submit", searchCurrentBook);
+$("open-bookmarks").addEventListener("click", () => {
+  bookmarkPosition = currentLocation();
+  renderBookmarks();
+  $("bookmarks-dialog").showModal();
+});
+$("bookmark-form").addEventListener("submit", saveCurrentBookmark);
 $("open-settings").addEventListener("click", () => { refreshVoices(); $("settings-dialog").showModal(); });
 $("text-size").addEventListener("change", event => { settings.size = event.target.value; applySettings(); persist(); });
 $("theme").addEventListener("change", event => { settings.theme = event.target.value; applySettings(); persist(); });
@@ -457,3 +615,4 @@ window.addEventListener("scroll", () => {
 window.addEventListener("pagehide", () => { if (!speaking && !audio) remember(); });
 applySettings();
 route();
+setupOfflineReading();
