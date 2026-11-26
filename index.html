@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f1">
+  <meta name="description" content="Read books, look up words in place, and listen aloud.">
+  <title>Reading Room</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="shell topbar">
+      <a href="#library" class="brand"><span aria-hidden="true" class="brand-mark">❧</span> Reading Room</a>
+      <nav aria-label="Main navigation">
+        <a href="#library" id="library-link">Library</a>
+        <a href="#words" id="words-link">Saved words</a>
+      </nav>
+      <button type="button" class="button button-outline" id="open-import"><span aria-hidden="true">＋</span> Add a book</button>
+    </div>
+  </header>
+  <main id="main" class="shell">
+    <section id="library" aria-labelledby="library-title">
+      <div class="hero" id="hero"></div>
+      <div id="my-books" class="shelf-section" hidden>
+        <div class="section-heading"><h2>My books</h2></div>
+        <div class="shelf" id="imports"></div>
+      </div>
+      <section class="shelf-section" aria-labelledby="library-title">
+        <div class="section-heading"><h1 id="library-title">The classics shelf</h1><a href="https://www.gutenberg.org/ebooks/" target="_blank" rel="noopener noreferrer">Find more on Project Gutenberg <span aria-hidden="true">↗</span></a></div>
+        <div class="shelf" id="classics"></div>
+      </section>
+    </section>
+    <section id="reader" aria-labelledby="book-title" hidden>
+      <div class="reader-bar">
+        <a href="#library" class="back-link">Library</a>
+        <div class="reader-tools">
+          <button id="open-contents" class="button button-outline">Contents</button>
+          <button id="open-settings" class="button button-outline" aria-label="Reading settings">Aa</button>
+        </div>
+      </div>
+      <p id="reader-status" role="status"></p>
+      <div id="reader-content" hidden>
+        <div class="reading-head">
+          <p class="eyebrow" id="chapter-count"></p>
+          <h1 id="book-title"></h1>
+          <p class="byline" id="book-author"></p>
+          <h2 id="chapter-title"></h2>
+          <p class="reader-tip">Tap a word for its meaning, or <button type="button" class="text-button" id="open-lookup">look up a word</button>.</p>
+        </div>
+        <article id="pages" class="pages" aria-label="Chapter text"></article>
+        <div class="chapter-nav"><button class="button button-outline" id="prev-chapter">Previous chapter</button><button class="button button-outline" id="next-chapter">Next chapter</button></div>
+        <div class="player" aria-label="Read-aloud player">
+          <button class="button button-primary" id="play">Listen</button>
+          <button class="button button-outline" id="stop" disabled>Stop</button>
+          <label class="speed"><span>Speed</span><select id="speed"><option value=".75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+          <span id="audio-status" role="status">Read aloud</span>
+        </div>
+      </div>
+    </section>
+    <section id="words" aria-labelledby="words-title" hidden>
+      <div class="section-heading words-heading"><h1 id="words-title">Saved words</h1></div>
+      <div id="word-list"></div>
+    </section>
+  </main>
+  <dialog id="import-dialog" aria-labelledby="import-title">
+    <div class="dialog-head"><h2 id="import-title">Add a book</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <p>Choose a DRM-free EPUB or a UTF-8 text file. Your imported books stay on this device.</p>
+    <label class="field">Book file<input type="file" id="book-file" accept=".epub,.txt,application/epub+zip,text/plain"></label>
+    <p class="form-status" id="import-status" role="status"></p>
+    <a href="https://www.gutenberg.org/ebooks/" target="_blank" rel="noopener noreferrer">Download a free book from Project Gutenberg ↗</a>
+  </dialog>
+  <dialog id="contents-dialog" aria-labelledby="contents-title">
+    <div class="dialog-head"><h2 id="contents-title">Contents</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <ol id="contents-list"></ol>
+  </dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="dialog-head"><h2 id="settings-title">Reading settings</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <label class="field">Text size <select id="text-size"><option value="17">Small</option><option value="21">Medium</option><option value="25">Large</option><option value="30">Extra large</option></select></label>
+    <label class="field">Theme <select id="theme"><option value="paper">Paper</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+    <label class="field">Read-aloud voice <select id="voice"><option value="">Device default</option></select></label>
+  </dialog>
+  <dialog id="definition-dialog" aria-labelledby="definition-title">
+    <div class="dialog-head"><h2 id="definition-title">Word lookup</h2><button class="close" data-close aria-label="Close">×</button></div>
+    <form id="lookup-form" class="lookup-form"><input id="lookup-input" type="search" aria-label="English word or phrase" maxlength="80" placeholder="English word or phrase" required><button class="button button-primary">Define</button></form>
+    <div id="definition-content" aria-live="polite"></div>
+    <p id="definition-context" class="context" hidden></p>
+    <button class="button button-outline" id="save-word" hidden>Save word</button>
+  </dialog>
+  <div id="announcement" class="visually-hidden" role="status"></div>
+</body>
+</html>
