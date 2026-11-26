@@ -13,8 +13,9 @@ function readState() {
   try { return JSON.parse(localStorage.getItem(key)) || {}; }
   catch { return {}; }
 }
-const saved = { locations: {}, words: {}, settings: { theme: "paper", size: "21", speed: "1", voice: "" }, ...readState() };
-const settings = saved.settings;
+const saved = { locations: {}, words: {}, ...readState() };
+const settings = saved.settings = { theme: "paper", size: "12", speed: "1", voice: "", ...saved.settings };
+if (!["12", "17", "25", "30"].includes(settings.size)) settings.size = "12";
 function persist() {
   try { localStorage.setItem(key, JSON.stringify(saved)); return true; }
   catch { $("announcement").textContent = "This browser could not save your changes."; return false; }
