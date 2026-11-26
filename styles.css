@@ -104,6 +104,14 @@ nav a[aria-current="page"] { color: var(--accent); text-decoration: underline; }
 .reading-progress progress { width: 100px; height: 9px; accent-color: var(--accent); }
 .reading-head h2 { margin-top: 31px; }
 .reader-tip { margin-top: 10px; color: var(--muted); }
+#toggle-original { margin-top: 10px; }
+.fixed-page { max-width: 710px; margin-inline: auto; }
+.fixed-page-note, #original-page-status { color: var(--muted); }
+.fixed-page-note, #original-page-status:not(:empty) { margin-bottom: 10px; }
+#original-page canvas, #original-page img { display: block; max-width: 100%; height: auto; margin-inline: auto; border-radius: 4px; }
+.import-formats { padding-left: 17px; }
+.import-formats li { margin-block: 5px; }
+.import-formats strong { margin-right: 4px; }
 .text-button { background: transparent; padding: 0; border: 0; text-decoration: underline; }
 .pages { font-size: var(--reader-size); line-height: 1.72; overflow-wrap: break-word; }
 .pages p { margin: 0 0 .94em; scroll-margin: 30px; }

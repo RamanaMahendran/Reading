@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f7f6f1">
   <meta name="description" content="Read books, look up words in place, and listen aloud.">
   <title>Reading Room</title>
-  <link rel="stylesheet" href="./styles.css?v=3">
-  <script type="module" src="./app.js?v=3"></script>
+  <link rel="stylesheet" href="./styles.css?v=4">
+  <script type="module" src="./app.js?v=4"></script>
 </head>
 <body>
   <header class="masthead">
@@ -54,11 +54,17 @@
           <p class="byline" id="book-author"></p>
           <div class="reading-progress"><progress id="reading-progress" max="100" value="0" aria-label="Position in book"></progress><span id="reading-percent"></span></div>
           <h2 id="chapter-title"></h2>
-          <p class="reader-tip">Tap a word for its meaning, or <button type="button" class="text-button" id="open-lookup">look up a word</button>.</p>
+          <p class="reader-tip" id="reader-tip">Tap a word for its meaning, or <button type="button" class="text-button" id="open-lookup">look up a word</button>.</p>
+          <button type="button" class="button button-outline" id="toggle-original" hidden>Original page</button>
         </div>
         <article id="pages" class="pages" aria-label="Chapter text"></article>
+        <div class="fixed-page" id="fixed-page" hidden>
+          <p class="fixed-page-note" id="fixed-page-note" hidden></p>
+          <p id="original-page-status" role="status"></p>
+          <div id="original-page"></div>
+        </div>
         <div class="chapter-nav"><button class="button button-outline" id="prev-chapter">Previous chapter</button><button class="button button-outline" id="next-chapter">Next chapter</button></div>
-        <div class="player" aria-label="Read-aloud player">
+        <div id="player" class="player" aria-label="Read-aloud player">
           <button class="button button-primary" id="play">Listen</button>
           <button class="button button-outline" id="stop" disabled>Stop</button>
           <label class="speed"><span>Speed</span><select id="speed"><option value=".75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
@@ -73,8 +79,13 @@
   </main>
   <dialog id="import-dialog" aria-labelledby="import-title">
     <div class="dialog-head"><h2 id="import-title">Add a book</h2><button class="close" data-close aria-label="Close">×</button></div>
-    <p>Choose a DRM-free EPUB or a UTF-8 text file. Your imported books stay on this device.</p>
-    <label class="field">Book file<input type="file" id="book-file" accept=".epub,.txt,application/epub+zip,text/plain"></label>
+    <p>Your imported files stay in this browser.</p>
+    <ul class="import-formats">
+      <li><strong>Books</strong> EPUB, MOBI, AZW, AZW3, FB2</li>
+      <li><strong>Documents</strong> PDF, DOCX, ODT, RTF, HTML, Markdown, TXT</li>
+      <li><strong>Comics</strong> CBZ</li>
+    </ul>
+    <label class="field">Book file<input type="file" id="book-file" accept=".pdf,.epub,.mobi,.azw,.azw3,.fb2,.docx,.odt,.rtf,.html,.htm,.xhtml,.md,.markdown,.txt,.cbz,application/pdf,application/epub+zip,text/plain"></label>
     <p class="form-status" id="import-status" role="status"></p>
     <a href="https://www.gutenberg.org/ebooks/" target="_blank" rel="noopener noreferrer">Download a free book from Project Gutenberg ↗</a>
   </dialog>

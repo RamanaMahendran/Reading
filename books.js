@@ -12,7 +12,7 @@ function paragraphs(text) {
   return text.split(/\n[\t ]*\n+/).map(block => block.replace(/\s+/g, " ").trim()).filter(Boolean);
 }
 
-function partition(items, title, max = 80) {
+export function partition(items, title, max = 80) {
   const sections = [];
   for (let index = 0; index < items.length; index += max) {
     sections.push({ title: index ? `${title} (continued)` : title, paragraphs: items.slice(index, index + max) });
@@ -46,7 +46,7 @@ export function parseText(text, type = "") {
   });
 }
 
-function readZip(buffer) {
+export function readZip(buffer) {
   const view = new DataView(buffer);
   const u16 = index => view.getUint16(index, true);
   const u32 = index => view.getUint32(index, true);
@@ -55,29 +55,29 @@ function readZip(buffer) {
     if (u32(end) === 0x06054b50 && end + 22 + u16(end + 20) === buffer.byteLength) break;
     end--;
   }
-  if (end < Math.max(0, buffer.byteLength - 65557)) fail("This file is not a readable EPUB archive.");
+  if (end < Math.max(0, buffer.byteLength - 65557)) fail("This file is not a readable ZIP archive.");
   const count = u16(end + 10);
   let cursor = u32(end + 16);
   const entries = new Map();
   for (let i = 0; i < count; i++) {
-    if (cursor + 46 > end || u32(cursor) !== 0x02014b50) fail("The EPUB archive is damaged.");
+    if (cursor + 46 > end || u32(cursor) !== 0x02014b50) fail("The ZIP archive is damaged.");
     const length = u16(cursor + 28);
-    if (cursor + 46 + length > end) fail("The EPUB archive is damaged.");
+    if (cursor + 46 + length > end) fail("The ZIP archive is damaged.");
     const name = decode.decode(new Uint8Array(buffer, cursor + 46, length));
     entries.set(name, { flags: u16(cursor + 8), method: u16(cursor + 10), compressed: u32(cursor + 20), size: u32(cursor + 24), offset: u32(cursor + 42) });
     cursor += 46 + length + u16(cursor + 30) + u16(cursor + 32);
   }
-  return async name => {
+  const bytesFor = async name => {
     const entry = entries.get(name);
-    if (!entry) fail("An EPUB document is missing.");
+    if (!entry) fail("A document is missing from this archive.");
     const { flags, method, compressed, size, offset } = entry;
-    if (flags & 1) fail("This EPUB is encrypted. Choose a DRM-free copy.");
-    if (size > bookLimit || offset + 30 > end || u32(offset) !== 0x04034b50) fail("An EPUB document could not be opened.");
+    if (flags & 1) fail("This archive is encrypted. Choose an unlocked copy.");
+    if (size > bookLimit || offset + 30 > end || u32(offset) !== 0x04034b50) fail("A document in this archive could not be opened.");
     const firstByte = offset + 30 + u16(offset + 26) + u16(offset + 28);
-    if (firstByte + compressed > end) fail("The EPUB archive is damaged.");
+    if (firstByte + compressed > end) fail("The ZIP archive is damaged.");
     const bytes = new Uint8Array(buffer, firstByte, compressed);
-    if (method === 0 && compressed === size) return decode.decode(bytes);
-    if (method !== 8) fail("This EPUB uses an unsupported compression format.");
+    if (method === 0 && compressed === size) return bytes;
+    if (method !== 8) fail("This archive uses an unsupported compression format.");
     const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
     const output = new Uint8Array(size);
     let index = 0;
@@ -85,25 +85,26 @@ function readZip(buffer) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (index + value.length > size) fail("The EPUB archive has an invalid file size.");
+        if (index + value.length > size) fail("This archive has an invalid file size.");
         output.set(value, index);
         index += value.length;
       }
     } finally {
       await reader.cancel();
     }
-    if (index !== size) fail("The EPUB archive is incomplete.");
-    return decode.decode(output);
+    if (index !== size) fail("The ZIP archive is incomplete.");
+    return output;
   };
+  return { names: [...entries.keys()], bytesFor, text: async name => decode.decode(await bytesFor(name)) };
 }
 
-function xml(text) {
+export function xml(text) {
   const document = new DOMParser().parseFromString(text.replace(/&nbsp;/g, "\u00a0"), "application/xml");
-  if (document.getElementsByTagName("parsererror").length) fail("The EPUB contains a document this reader cannot parse.");
+  if (document.getElementsByTagName("parsererror").length) fail("This file contains invalid XML.");
   return document;
 }
 
-function elements(document, name) {
+export function elements(document, name) {
   return Array.from(document.getElementsByTagNameNS("*", name));
 }
 
@@ -113,12 +114,11 @@ function archivePath(relative, base = "") {
   return decodeURIComponent(url.pathname.slice(1));
 }
 
-function epubText(document) {
-  const body = elements(document, "body")[0];
+export function extractBlocks(body) {
   if (!body) return { title: "", items: [] };
   const heading = /^h[1-6]$/;
   const blocks = new Set(["p", "div", "section", "li", "blockquote", "br", "pre", "dt", "dd", "hr", "td", "tr", "figcaption"]);
-  const ignored = new Set(["script", "style", "svg", "noscript", "nav"]);
+  const ignored = new Set(["script", "style", "svg", "noscript", "nav", "head", "template", "iframe", "object"]);
   let title = "";
   let current = "";
   const items = [];
@@ -129,6 +129,7 @@ function epubText(document) {
   };
   const visit = node => {
     if (node.nodeType === 3 || node.nodeType === 4) { current += node.nodeValue; return; }
+    if (node.nodeType === 11) { node.childNodes.forEach(visit); return; }
     if (node.nodeType !== 1 || ignored.has(node.localName)) return;
     if (heading.test(node.localName)) {
       flush();
@@ -148,7 +149,7 @@ function epubText(document) {
 }
 
 export async function parseEpub(buffer) {
-  const read = readZip(buffer);
+  const { text: read } = readZip(buffer);
   const container = xml(await read("META-INF/container.xml"));
   const packagePath = elements(container, "rootfile")[0]?.getAttribute("full-path");
   if (!packagePath) fail("The EPUB has no book manifest.");
@@ -164,22 +165,23 @@ export async function parseEpub(buffer) {
     const source = await read(archivePath(href, packagePath));
     total += source.length;
     if (total > bookLimit) fail("The expanded EPUB text is too large for this reader.");
-    const result = epubText(xml(source));
+    const result = extractBlocks(elements(xml(source), "body")[0]);
     if (result?.items.length) sections.push({ title: result.title || `Section ${sections.length + 1}`, paragraphs: result.items });
   }
   return { title: meta("title"), author: meta("creator"), language: meta("language"), sections };
 }
 
 export async function importBook(file) {
-  if (!file.size || file.size > bookLimit) fail("Choose a book smaller than 24 MB.");
+  if (!file.size) fail("This file is empty.");
   const extension = file.name.split(".").at(-1).toLowerCase();
-  if (!["txt", "epub"].includes(extension)) fail("Choose a DRM-free EPUB or a UTF-8 TXT file.");
+  const limit = ["pdf", "cbz"].includes(extension) ? 100 : 24;
+  if (file.size > limit * 1024 * 1024) fail(`Choose a ${extension.toUpperCase()} file of ${limit} MB or less.`);
   let parsed;
   if (extension === "epub") parsed = await parseEpub(await file.arrayBuffer());
-  else {
+  else if (extension === "txt") {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
     parsed = { sections: parseText(text), author: /^Author:[\t ]*(.+)$/im.exec(text)?.[1]?.trim(), title: /^Title:[\t ]*(.+)$/im.exec(text)?.[1]?.trim() };
-  }
+  } else parsed = await (await import("./format-readers.js")).readFormat(file, extension);
   if (!parsed.sections.length) fail("This book has no readable text.");
   return {
     id: `local-${crypto.randomUUID()}`,
@@ -187,6 +189,7 @@ export async function importBook(file) {
     author: parsed.author || "",
     language: parsed.language || "en",
     sections: parsed.sections,
+    ...(parsed.visual ? { visual: parsed.visual, original: file } : {}),
     imported: Date.now()
   };
 }
